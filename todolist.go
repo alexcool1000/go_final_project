@@ -19,6 +19,9 @@ import (
 func main() {
 	checkTable()
 	port := os.Getenv("TODO_PORT")
+	if len(port) == 0 {
+		port = "7540"
+	}
 	serv := fmt.Sprintf("0.0.0.0:%s", port)
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 	http.HandleFunc("/api/nextdate", apiNextDateHandle)
