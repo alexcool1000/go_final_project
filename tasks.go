@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+type task struct {
+	Id      string `json:"id"`
+	Date    string `json:"date"`
+	Title   string `json:"title"`
+	Comment string `json:"comment"`
+	Repeat  string `json:"repeat"`
+}
+
 func addTask(task task) (string, error) {
 	if len(task.Title) == 0 {
 		return "", errors.New("не заполнен заголовок задачи")
@@ -47,26 +55,22 @@ func addTask(task task) (string, error) {
 		sql.Named("repeat", task.Repeat))
 	if err != nil {
 		log.Println(err)
-		return "", errors.New("internal server error")
+		return "", error500()
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
 		log.Println(err)
-		return "nil", errors.New("internal server error")
+		return "nil", error500()
 	}
 	return strconv.Itoa(int(id)), nil
 }
 
 func getTasks(search string) ([]task, error) {
-	db, err := openDb()
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
 
 	query := "SELECT id, date, title, comment, repeat FROM scheduler"
 	var rows *sql.Rows
 	var tasks []task
+	var err error
 	if len(search) > 0 {
 		date, err := time.Parse("02.01.2006", search)
 		if err == nil {
@@ -78,7 +82,7 @@ func getTasks(search string) ([]task, error) {
 		}
 		query += " ORDER BY date LIMIT 50"
 		rows, err = db.Query(query, sql.Named("search", search))
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return tasks, nil
 		}
 		if err != nil {
@@ -92,7 +96,7 @@ func getTasks(search string) ([]task, error) {
 		}
 		if err != nil {
 			log.Println(err)
-			return nil, errors.New("internal server error")
+			return nil, error500()
 		}
 	}
 	defer rows.Close()
@@ -102,9 +106,14 @@ func getTasks(search string) ([]task, error) {
 		err = rows.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
 			log.Println(err)
-			return nil, errors.New("internal server error")
+			return nil, error500()
 		}
 		tasks = append(tasks, task)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Println(err)
+		return nil, error500()
 	}
 	return tasks, nil
 }
@@ -127,12 +136,12 @@ func getTask(id string) (task, error) {
 	query := "SELECT id, date, title, comment, repeat FROM scheduler WHERE id = :id"
 	row := db.QueryRow(query, sql.Named("id", idInt))
 	err = row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return task, errors.New("задача не найдена")
 	}
 	if err != nil {
 		log.Println(err)
-		return task, errors.New("internal server error")
+		return task, error500()
 	}
 	return task, nil
 }
@@ -183,12 +192,12 @@ func updateTask(task task) error {
 		sql.Named("repeat", task.Repeat))
 	if err != nil {
 		log.Println(err)
-		return errors.New("internal server error")
+		return error500()
 	}
 	rowAffected, err := res.RowsAffected()
 	if err != nil {
 		log.Println(err)
-		return errors.New("internal server error")
+		return error500()
 	}
 	if rowAffected == 0 {
 		return errors.New("задача не найдена")
@@ -232,12 +241,12 @@ func deleteTask(id string) error {
 		sql.Named("id", idInt))
 	if err != nil {
 		log.Println(err)
-		return errors.New("internal server error")
+		return error500()
 	}
 	rowAffected, err := res.RowsAffected()
 	if err != nil {
 		log.Println(err)
-		return errors.New("internal server error")
+		return error500()
 	}
 	if rowAffected == 0 {
 		return errors.New("задача не найдена")
@@ -251,14 +260,18 @@ func openDb() (*sql.DB, error) {
 		appPath, err := os.Executable()
 		if err != nil {
 			log.Println(err)
-			return nil, errors.New("internal server error")
+			return nil, error500()
 		}
 		dbFile = filepath.Join(filepath.Dir(appPath), "scheduler.db")
 	}
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("internal server error")
+		return nil, error500()
 	}
 	return db, nil
+}
+
+func error500() error {
+	return errors.New("internal server error")
 }

@@ -48,8 +48,83 @@ func addMonth(now, date time.Time, repeat []string) (string, error) {
 	}
 	switch len(repeat) {
 	case 2:
-		rull := strings.Split(repeat[1], ",")
-		for newDate.Before(now) || newDate.Equal(now) {
+		return addMonthDays(now, newDate, repeat)
+	case 3:
+		return addMonthDaysMonths(now, newDate, repeat)
+	default:
+		return formatError()
+	}
+}
+
+func addMonthDays(now, newDate time.Time, repeat []string) (string, error) {
+	rull := strings.Split(repeat[1], ",")
+	for newDate.Before(now) || newDate.Equal(now) {
+		intDays := make([]int, len(rull))
+		for i, rullDay := range rull {
+			rullDayInt, err := strconv.Atoi(rullDay)
+			if err != nil {
+				log.Println(err)
+				return formatError()
+			}
+			if rullDayInt > 31 || rullDayInt < -2 {
+				return formatError()
+			}
+			if rullDayInt < 0 {
+				tempDate := timeDate(newDate.Year(), newDate.Month()+1, 1, newDate.Location())
+				rullDayInt = tempDate.AddDate(0, 0, rullDayInt).Day()
+			}
+			intDays[i] = rullDayInt
+		}
+		slices.Sort(intDays)
+		newDateSet := false
+		for _, intDay := range intDays {
+			tempDate := time.Date(newDate.Year(), newDate.Month(), intDay, 0, 0, 0, 0, newDate.Location())
+			if tempDate.Month() != newDate.Month() { // если число перескакивает на следующий месяц
+				newDate = timeDate(newDate.Year(), newDate.Month()+1, intDays[0], newDate.Location())
+				newDateSet = true
+				break
+			}
+			if tempDate.After(newDate) {
+				newDate = tempDate
+				break
+			}
+		}
+		if newDate.After(now) {
+			return newDate.Format("20060102"), nil
+		}
+		if !newDateSet {
+			newDate = timeDate(newDate.Year(), newDate.Month()+1, intDays[0], newDate.Location())
+		}
+
+	}
+	return newDate.Format("20060102"), nil
+}
+
+func addMonthDaysMonths(now, newDate time.Time, repeat []string) (string, error) {
+	rull := strings.Split(repeat[1], ",")
+	rullMonths := strings.Split(repeat[2], ",")
+	for newDate.Before(now) || newDate.Equal(now) {
+
+		intMonths := make([]int, len(rullMonths))
+		for i, rullMonth := range rullMonths {
+			rullMonthInt, err := strconv.Atoi(rullMonth)
+			if err != nil {
+				log.Println(err)
+				return formatError()
+			}
+			if rullMonthInt > 12 {
+				return formatError()
+			}
+			if rullMonthInt < 0 {
+				return formatError()
+			}
+			intMonths[i] = rullMonthInt
+		}
+		slices.Sort(intMonths)
+		firstDay := 1
+		newDateSet := false
+		for _, intMonth := range intMonths {
+
 			intDays := make([]int, len(rull))
 			for i, rullDay := range rull {
 				rullDayInt, err := strconv.Atoi(rullDay)
@@ -61,99 +136,32 @@ func addMonth(now, date time.Time, repeat []string) (string, error) {
 					return formatError()
 				}
 				if rullDayInt < 0 {
-					tempDate := timeDate(newDate.Year(), newDate.Month()+1, 1, newDate.Location())
+					tempDate := timeDate(newDate.Year(), time.Month(intMonth)+1, 1, newDate.Location())
 					rullDayInt = tempDate.AddDate(0, 0, rullDayInt).Day()
 				}
 				intDays[i] = rullDayInt
 			}
 			slices.Sort(intDays)
-			newDateSet := false
+			firstDay = intDays[0]
 			for _, intDay := range intDays {
-				tempDate := time.Date(newDate.Year(), newDate.Month(), intDay, 0, 0, 0, 0, newDate.Location())
-				if tempDate.Month() != newDate.Month() { // если число перескакивает на следующий месяц
-					newDate = timeDate(newDate.Year(), newDate.Month()+1, intDays[0], newDate.Location())
-					newDateSet = true
+				tempDate := timeDate(newDate.Year(), time.Month(intMonth), intDay, newDate.Location())
+				if tempDate.Month() != time.Month(intMonth) { // если число перескакивает на следующий месяц
 					break
 				}
 				if tempDate.After(newDate) {
 					newDate = tempDate
+					newDateSet = true
 					break
 				}
 			}
-			if newDate.After(now) {
-				return newDate.Format("20060102"), nil
-			}
-			if !newDateSet {
-				newDate = timeDate(newDate.Year(), newDate.Month()+1, intDays[0], newDate.Location())
+			if newDateSet {
+				break
 			}
 
 		}
-	case 3:
-		rull := strings.Split(repeat[1], ",")
-		rullMonths := strings.Split(repeat[2], ",")
-		for newDate.Before(now) || newDate.Equal(now) {
-
-			intMonths := make([]int, len(rullMonths))
-			for i, rullMonth := range rullMonths {
-				rullMonthInt, err := strconv.Atoi(rullMonth)
-				if err != nil {
-					log.Println(err)
-					return formatError()
-				}
-				if rullMonthInt > 12 {
-					return formatError()
-				}
-				if rullMonthInt < 0 {
-					return formatError()
-				}
-				intMonths[i] = rullMonthInt
-			}
-			slices.Sort(intMonths)
-			firstDay := 1
-			newDateSet := false
-			for _, intMonth := range intMonths {
-
-				intDays := make([]int, len(rull))
-				for i, rullDay := range rull {
-					rullDayInt, err := strconv.Atoi(rullDay)
-					if err != nil {
-						log.Println(err)
-						return formatError()
-					}
-					if rullDayInt > 31 || rullDayInt < -31 {
-						return formatError()
-					}
-					if rullDayInt < 0 {
-						tempDate := timeDate(newDate.Year(), time.Month(intMonth)+1, 1, newDate.Location())
-						rullDayInt = tempDate.AddDate(0, 0, rullDayInt).Day()
-					}
-					intDays[i] = rullDayInt
-				}
-				slices.Sort(intDays)
-				firstDay = intDays[0]
-				for _, intDay := range intDays {
-					tempDate := timeDate(newDate.Year(), time.Month(intMonth), intDay, newDate.Location())
-					if tempDate.Month() != time.Month(intMonth) { // если число перескакивает на следующий месяц
-						break
-					}
-					if tempDate.After(newDate) {
-						newDate = tempDate
-						newDateSet = true
-						break
-					}
-				}
-				if newDateSet {
-					break
-				}
-
-			}
-			if newDate.Before(now) || newDate.Equal(now) {
-				newDate = timeDate(newDate.Year()+1, time.Month(intMonths[0]), firstDay, newDate.Location())
-			}
-
+		if newDate.Before(now) || newDate.Equal(now) {
+			newDate = timeDate(newDate.Year()+1, time.Month(intMonths[0]), firstDay, newDate.Location())
 		}
-	default:
-		return formatError()
 	}
 	return newDate.Format("20060102"), nil
 }
